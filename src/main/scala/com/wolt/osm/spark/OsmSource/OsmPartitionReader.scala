@@ -3,32 +3,36 @@ package com.wolt.osm.spark.OsmSource
 import java.io.{FileInputStream, InputStream}
 import java.util.concurrent._
 import java.util.function.Consumer
-
 import com.wolt.osm.parallelpbf.ParallelBinaryParser
 import com.wolt.osm.parallelpbf.entity._
 import org.apache.hadoop.fs.{FSDataInputStream, Path}
 import org.apache.spark.SparkFiles
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util._
-import org.apache.spark.sql.sources.v2.reader.InputPartitionReader
+import org.apache.spark.sql.connector.read.PartitionReader
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 
-class OsmPartitionReader(input: String, hadoop:SerializableHadoopConfigration, schema: StructType, threads: Int, partitionsNo: Int, partition: Int, useLocal: Boolean) extends InputPartitionReader[InternalRow] {
+class OsmPartitionReader(input: String, hadoop:SerializableHadoopConfigration, schema: StructType, threads: Int, partitionsNo: Int, partition: Int, useLocal: Boolean) extends PartitionReader[InternalRow] {
   private val schemaColumnNames = schema.fields.map(_.name)
+  private val parserConfigured = new AtomicBoolean(false)
 
   private val parserTask = new FutureTask[Unit](new Callable[Unit]() {
     override def call: Unit = {
       val parser = new ParallelBinaryParser(inputStream, threads, partitionsNo, partition)
-
       parser.onNode(onNode)
       parser.onWay(onWay)
       parser.onRelation(onRelation)
 
-      parser.parse()
+      try {
+        parser.parse()
+      } catch {
+        case e : Throwable => e.printStackTrace()
+      }
     }
   })
   private var parseThread: Thread = _
@@ -49,12 +53,18 @@ class OsmPartitionReader(input: String, hadoop:SerializableHadoopConfigration, s
   }
 
   override def next(): Boolean = {
-    if (parseThread == null) {
+    if (parserConfigured.compareAndSet(false,true)) {
       inputStream = getInputStream
       parseThread = new Thread(parserTask)
+      parseThread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler {
+        override def uncaughtException(t: Thread, e: Throwable): Unit = {
+          e.printStackTrace()
+          throw new RuntimeException(e);
+        }
+      });
       parseThread.start()
     }
-    while (!parserTask.isDone) {
+    while (!(queue.isEmpty && parserTask.isDone)) {
       currentRow = queue.poll(1, TimeUnit.SECONDS)
       if (currentRow != null) {
         return true
@@ -107,7 +117,7 @@ class OsmPartitionReader(input: String, hadoop:SerializableHadoopConfigration, s
       override def accept(t: T): Unit = {
         val content = makeRowPreamble(t) ++= handler(t)
         val row = InternalRow.fromSeq(content)
-        queue.offer(row, 1, TimeUnit.SECONDS)
+        queue.put(row)
       }
     }
   }

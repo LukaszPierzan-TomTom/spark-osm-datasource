@@ -11,18 +11,18 @@ publishMavenStyle := true
 publishTo := sonatypePublishToBundle.value
 
 name := "spark-osm-datasource"
-version := "0.3.0"
+version := "0.3.1"
 
-scalaVersion := "2.11.12"
-crossScalaVersions := Seq("2.12.10")
+//scalaVersion := "2.11.12"
+scalaVersion := "2.12.10"
 
-val mavenLocal = "Local Maven Repository" at Path.userHome.asFile.toURI.toURL + ".m2/repository"
+val mavenLocal = "Local Maven Repository" at "/opt/maven/repository"
 resolvers += mavenLocal
 
 libraryDependencies ++= Seq(
-  "org.apache.spark" %% "spark-core" % "2.4.4",
-  "org.apache.spark" %% "spark-sql" % "2.4.4",
-  "com.wolt.osm" % "parallelpbf" % "0.2.0",
+  "org.apache.spark" %% "spark-core" % "3.1.1",
+  "org.apache.spark" %% "spark-sql" % "3.1.1",
+  "com.wolt.osm" % "parallelpbf" % "0.3.1",
   "org.scalatest" %% "scalatest" % "3.1.0" % "it,test",
   "org.scalactic" %% "scalactic" % "3.1.0" % "it,test"
 )
