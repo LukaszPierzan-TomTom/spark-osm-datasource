@@ -11,7 +11,7 @@ publishMavenStyle := true
 publishTo := sonatypePublishToBundle.value
 
 name := "spark-osm-datasource"
-version := "0.3.1"
+version := "0.3.0"
 
 //scalaVersion := "2.11.12"
 scalaVersion := "2.12.10"
